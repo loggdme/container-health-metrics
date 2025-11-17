@@ -22,6 +22,8 @@ docker run -d \
   container-health-metrics
 ```
 
+**Note:** The container runs as root to ensure Docker socket access works on both Linux and macOS. On macOS (Docker Desktop/OrbStack), the socket is typically root-owned inside containers, so root access is required. On Linux systems, you can run as a non-root user by mounting the socket with appropriate permissions and using `--user` flag if needed.
+
 ### Environment Variables
 
 - `PORT` - Server port (default: `9066`)

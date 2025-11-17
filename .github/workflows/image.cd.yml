@@ -2,8 +2,8 @@ name: Image CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "*"
 
 jobs:
   build:
@@ -33,6 +33,6 @@ jobs:
           push: true
           tags: |
             ghcr.io/loggdme/container-health-metrics:latest
-            ghcr.io/loggdme/container-health-metrics:${{ github.sha }}
+            ghcr.io/loggdme/container-health-metrics:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

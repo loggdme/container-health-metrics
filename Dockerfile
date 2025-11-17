@@ -15,11 +15,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 FROM alpine:3.20
 
 RUN apk --no-cache add ca-certificates docker-cli wget
-RUN adduser -D -g '' deploy
 
 COPY --from=builder /build/docker-health-exporter /usr/local/bin/docker-health-exporter
 
-USER deploy
 EXPOSE 9066
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

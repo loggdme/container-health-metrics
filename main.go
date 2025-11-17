@@ -1,17 +1,29 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 )
+
+const dockerSocketPath = "/var/run/docker.sock"
+
+var dockerClient = &http.Client{
+	Transport: &http.Transport{
+		DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+			return net.Dial("unix", dockerSocketPath)
+		},
+	},
+	Timeout: 5 * time.Second,
+}
 
 type ContainerState struct {
 	Status string `json:"Status"`
@@ -20,18 +32,39 @@ type ContainerState struct {
 	} `json:"Health"`
 }
 
-func getContainerState(containerName string) (string, error) {
-	cmd := exec.Command("docker", "inspect", "--format", "{{json .State}}", containerName)
-	output, err := cmd.Output()
+type ContainerInfo struct {
+	ID    string         `json:"Id"`
+	Names []string       `json:"Names"`
+	State ContainerState `json:"State"`
+}
+
+type ContainerListItem struct {
+	ID    string   `json:"Id"`
+	Names []string `json:"Names"`
+}
+
+func getContainerState(containerID string) (string, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost/containers/%s/json", containerID), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := dockerClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to inspect container: %w", err)
 	}
+	defer resp.Body.Close()
 
-	var state ContainerState
-	if err := json.Unmarshal(output, &state); err != nil {
-		return "", fmt.Errorf("failed to parse container state: %w", err)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to inspect container: status %d", resp.StatusCode)
 	}
 
+	var containerInfo ContainerInfo
+	if err := json.NewDecoder(resp.Body).Decode(&containerInfo); err != nil {
+		return "", fmt.Errorf("failed to parse container info: %w", err)
+	}
+
+	state := containerInfo.State
 	if state.Status != "running" {
 		return "exited", nil
 	}
@@ -48,26 +81,39 @@ func getContainerState(containerName string) (string, error) {
 }
 
 func getAllContainerStates() (map[string]string, error) {
-	cmd := exec.Command("docker", "ps", "-a", "--format", "{{.Names}}")
-	output, err := cmd.Output()
+	req, err := http.NewRequest("GET", "http://localhost/containers/json?all=true", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := dockerClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
+	defer resp.Body.Close()
 
-	containerNames := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to list containers: status %d", resp.StatusCode)
+	}
+
+	var containers []ContainerListItem
+	if err := json.NewDecoder(resp.Body).Decode(&containers); err != nil {
+		return nil, fmt.Errorf("failed to parse containers list: %w", err)
+	}
+
 	states := make(map[string]string)
 
-	for _, containerName := range containerNames {
-		containerName = strings.TrimSpace(containerName)
+	for _, container := range containers {
+		if len(container.Names) == 0 {
+			continue
+		}
+
+		containerName := strings.TrimPrefix(container.Names[0], "/")
 		if containerName == "" {
 			continue
 		}
 
-		if len(containerName) > 0 && containerName[0] == '/' {
-			containerName = containerName[1:]
-		}
-
-		state, err := getContainerState(containerName)
+		state, err := getContainerState(container.ID)
 		if err != nil {
 			continue
 		}
