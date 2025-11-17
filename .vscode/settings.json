@@ -14,7 +14,8 @@
 	"explorer.fileNesting.expand": false,
 	"explorer.fileNesting.patterns": {
 		"go.mod": "go.sum,.gitignore,.air.toml",
-		"main.go": ".env.local"
+		"main.go": ".env.local",
+		"README.md": "LICENSE"
 	},
 
 	// Spell Checker
@@ -29,6 +30,7 @@
 		"isatty",
 		"labstack",
 		"ldflags",
+		"loggd",
 		"loggdme",
 		"mattn",
 		"valyala"
