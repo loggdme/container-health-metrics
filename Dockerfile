@@ -12,16 +12,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -o docker-health-exporter .
 
 
-FROM alpine:3.20
-
-RUN apk --no-cache add ca-certificates docker-cli wget
+FROM alpine:3.22.2
 
 COPY --from=builder /build/docker-health-exporter /usr/local/bin/docker-health-exporter
 
 EXPOSE 9066
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q --spider http://localhost:9066/health || exit 1
-
+  CMD ["wget", "-qO-", "http://localhost:9066/health"]
+  
 ENTRYPOINT ["docker-health-exporter"]
-
